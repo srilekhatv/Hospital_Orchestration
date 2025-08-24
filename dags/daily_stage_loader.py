@@ -24,12 +24,11 @@ def validate_rows(**context):
         raise AirflowFailException("❌ No result returned from row count query")
 
 
-# ✅ DAG definition
 with DAG(
     dag_id="daily_stage_loader",
-    start_date=datetime(2025, 8, 1),   # 👈 must be in the past so DAG is visible
-    schedule_interval="@daily",        # run every day
-    catchup=False,                     # avoids huge backfill
+    start_date=datetime(2025, 8, 1),   # must be in the past
+    schedule_interval="@daily",
+    catchup=False,
     tags=["snowflake", "hospital", "dbt"]
 ) as dag:
 
@@ -46,24 +45,24 @@ with DAG(
         python_callable=log_file,
     )
 
-    # Step 3: Load file into RAW with source_file
+    # Step 3: Load file into RAW
     load_task = SnowflakeOperator(
-    task_id="load_daily_file",
-    snowflake_conn_id="snowflake_conn",
-    sql="""
-        COPY INTO RAW.PATIENT_VISITS
-        FROM @RAW.HOSPITAL_STAGE/{{ (execution_date + macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
-        FILE_FORMAT = (FORMAT_NAME = RAW.CLEANED_CSV_FORMAT)
-        ON_ERROR = 'CONTINUE';
-    """
-)
+        task_id="load_daily_file",
+        snowflake_conn_id="snowflake_conn",
+        sql="""
+            COPY INTO RAW.PATIENT_VISITS
+            FROM @RAW.HOSPITAL_STAGE/{{ (execution_date + macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
+            FILE_FORMAT = (FORMAT_NAME = RAW.CLEANED_CSV_FORMAT)
+            ON_ERROR = 'CONTINUE';
+        """
+    )
 
     # Step 4: Row count check
     rowcount_task = SnowflakeOperator(
         task_id="check_row_count",
         snowflake_conn_id="snowflake_conn",
         sql="SELECT COUNT(*) FROM RAW.PATIENT_VISITS;",
-        do_xcom_push=True,  # 👈 Required so validate_rows can see row count
+        do_xcom_push=True,   # Required for validate_rows
     )
 
     # Step 5: Validate load (fail if 0 rows)
@@ -72,7 +71,7 @@ with DAG(
         python_callable=validate_rows,
     )
 
-    # Step 6: Insert audit log (⚠️ ensure AUDIT.LOAD_LOGS exists first!)
+    # Step 6: Insert audit log (capture source_file here instead of RAW table)
     audit_log_task = SnowflakeOperator(
         task_id="insert_audit_log",
         snowflake_conn_id="snowflake_conn",
@@ -80,11 +79,10 @@ with DAG(
             INSERT INTO AUDIT.LOAD_LOGS (execution_date, source_file, rows_loaded)
             SELECT 
                 '{{ ds }}'::DATE AS execution_date,
-                source_file,
+                METADATA$FILENAME AS source_file,
                 COUNT(*) AS rows_loaded
-            FROM RAW.PATIENT_VISITS
-            WHERE source_file LIKE '%{{ ds }}%'
-            GROUP BY source_file;
+            FROM @RAW.HOSPITAL_STAGE/{{ (execution_date + macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
+            (FILE_FORMAT => RAW.CLEANED_CSV_FORMAT);
         """
     )
 
