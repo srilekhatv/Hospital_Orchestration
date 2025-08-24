@@ -14,9 +14,14 @@ def log_file(execution_date, **kwargs):
 # Step 4: Data quality check
 def validate_rows(**context):
     rows = context['ti'].xcom_pull(task_ids='check_row_count')
-    if rows and int(rows[0][0]) == 0:
-        raise AirflowFailException("❌ No rows loaded into RAW.PATIENT_VISITS")
-    print(f"✅ Validation passed: {rows[0][0]} total rows in RAW")
+    if rows:
+        # SnowflakeOperator returns [{'COUNT(*)': value}]
+        count = list(rows[0].values())[0]
+        if int(count) == 0:
+            raise AirflowFailException("❌ No rows loaded into RAW.PATIENT_VISITS")
+        print(f"✅ Validation passed: {count} total rows in RAW")
+    else:
+        raise AirflowFailException("❌ No result returned from row count query")
 
 
 # ✅ DAG definition
