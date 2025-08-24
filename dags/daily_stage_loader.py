@@ -73,18 +73,20 @@ with DAG(
 
     # Step 6: Insert audit log (capture source_file here instead of RAW table)
     audit_log_task = SnowflakeOperator(
-        task_id="insert_audit_log",
-        snowflake_conn_id="snowflake_conn",
-        sql="""
-            INSERT INTO AUDIT.LOAD_LOGS (execution_date, source_file, rows_loaded)
-            SELECT 
-                '{{ ds }}'::DATE AS execution_date,
-                METADATA$FILENAME AS source_file,
-                COUNT(*) AS rows_loaded
-            FROM @RAW.HOSPITAL_STAGE/{{ (execution_date + macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
-            (FILE_FORMAT => RAW.CLEANED_CSV_FORMAT);
-        """
-    )
+    task_id="insert_audit_log",
+    snowflake_conn_id="snowflake_conn",
+    sql="""
+        INSERT INTO AUDIT.LOAD_LOGS (execution_date, source_file, rows_loaded)
+        SELECT 
+            '{{ ds }}'::DATE AS execution_date,
+            METADATA$FILENAME AS source_file,
+            COUNT(*) AS rows_loaded
+        FROM @RAW.HOSPITAL_STAGE/{{ (execution_date + macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
+        (FILE_FORMAT => RAW.CLEANED_CSV_FORMAT)
+        GROUP BY METADATA$FILENAME;
+    """
+)
+
 
     # Step 7: dbt run
     dbt_run = DbtCloudRunJobOperator(
