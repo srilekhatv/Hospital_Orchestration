@@ -6,11 +6,12 @@ from airflow.exceptions import AirflowFailException
 from datetime import datetime
 
 
+# Step 0: Log file for debugging
 def log_file(execution_date, **kwargs):
     print(f"Scheduled to load file for execution date: {execution_date}")
 
 
-# ✅ Data quality check
+# Step 4: Data quality check
 def validate_rows(**context):
     rows = context['ti'].xcom_pull(task_ids='check_row_count')
     if rows and int(rows[0][0]) == 0:
@@ -18,29 +19,29 @@ def validate_rows(**context):
     print(f"✅ Validation passed: {rows[0][0]} total rows in RAW")
 
 
+# ✅ DAG definition
 with DAG(
     dag_id="daily_stage_loader",
-    start_date=datetime(2025, 8, 24),
-    end_date=datetime(2025, 9, 1),
-    schedule_interval="@daily",     # run every midnight
-    catchup=True,                   # simulate backfill
+    start_date=datetime(2025, 8, 1),   # 👈 must be in the past so DAG is visible
+    schedule_interval="@daily",        # run every day
+    catchup=False,                     # avoids huge backfill
     tags=["snowflake", "hospital", "dbt"]
 ) as dag:
 
-    # Step 0: Truncate RAW (only first run; comment later if not needed)
+    # Step 1: Truncate RAW (only needed on first run)
     truncate_task = SnowflakeOperator(
         task_id="truncate_table",
         snowflake_conn_id="snowflake_conn",
         sql="TRUNCATE TABLE IF EXISTS RAW.PATIENT_VISITS;"
     )
 
-    # Step 1: Log file name
+    # Step 2: Log file name
     log_task = PythonOperator(
         task_id="log_filename",
         python_callable=log_file,
     )
 
-    # Step 2: Load file into RAW with source_file
+    # Step 3: Load file into RAW with source_file
     load_task = SnowflakeOperator(
         task_id="load_daily_file",
         snowflake_conn_id="snowflake_conn",
@@ -55,21 +56,21 @@ with DAG(
         """
     )
 
-    # Step 3: Row count check
+    # Step 4: Row count check
     rowcount_task = SnowflakeOperator(
         task_id="check_row_count",
         snowflake_conn_id="snowflake_conn",
         sql="SELECT COUNT(*) FROM RAW.PATIENT_VISITS;",
+        do_xcom_push=True,  # 👈 Required so validate_rows can see row count
     )
 
-    # Step 4: Validate load (fail if 0 rows)
+    # Step 5: Validate load (fail if 0 rows)
     validate_task = PythonOperator(
         task_id="validate_load",
         python_callable=validate_rows,
-        provide_context=True,
     )
 
-    # Step 5: Insert audit log
+    # Step 6: Insert audit log (⚠️ ensure AUDIT.LOAD_LOGS exists first!)
     audit_log_task = SnowflakeOperator(
         task_id="insert_audit_log",
         snowflake_conn_id="snowflake_conn",
@@ -85,7 +86,7 @@ with DAG(
         """
     )
 
-    # Step 6: dbt run
+    # Step 7: dbt run
     dbt_run = DbtCloudRunJobOperator(
         task_id="dbt_run",
         job_id=70471823500217,        # Hospital Run Job ID
@@ -94,7 +95,7 @@ with DAG(
         timeout=600,
     )
 
-    # Step 7: dbt test
+    # Step 8: dbt test
     dbt_test = DbtCloudRunJobOperator(
         task_id="dbt_test",
         job_id=70471823500220,        # Hospital Test Job ID
