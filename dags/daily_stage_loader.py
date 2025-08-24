@@ -43,18 +43,18 @@ with DAG(
 
     # Step 3: Load file into RAW with source_file
     load_task = SnowflakeOperator(
-        task_id="load_daily_file",
-        snowflake_conn_id="snowflake_conn",
-        sql="""
-            COPY INTO RAW.PATIENT_VISITS
-            FROM (
-                SELECT *, METADATA$FILENAME AS source_file
-                FROM @RAW.HOSPITAL_STAGE/{{ ds }}.csv t
-            )
-            FILE_FORMAT = (FORMAT_NAME = RAW.CLEANED_CSV_FORMAT)
-            ON_ERROR = 'CONTINUE';
-        """
-    )
+    task_id="load_daily_file",
+    snowflake_conn_id="snowflake_conn",
+    sql="""
+        COPY INTO RAW.PATIENT_VISITS
+        FROM (
+            SELECT *, METADATA$FILENAME AS source_file
+            FROM @RAW.HOSPITAL_STAGE/{{ (execution_date + macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv t
+        )
+        FILE_FORMAT = (FORMAT_NAME = RAW.CLEANED_CSV_FORMAT)
+        ON_ERROR = 'CONTINUE';
+    """
+)
 
     # Step 4: Row count check
     rowcount_task = SnowflakeOperator(
