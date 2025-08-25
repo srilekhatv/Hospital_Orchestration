@@ -21,7 +21,7 @@ with DAG(
         endpoint=f"api/v2/accounts/{ACCOUNT_ID}/jobs/{JOB_ID}/run/",
         method="POST",
         headers={
-            "Authorization": "Token dbtu_XXXXXXXXXXXXXXXXXX",  # your service token
+            "Authorization": "Token dbtu_uwGba_sY2eqd6NcQLh8u_6pdFHgk9ezQcjvvDHmgYb81xNim8I",  # your service token
             "Content-Type": "application/json"
         },
         data="{}"  # empty JSON payload triggers job with default settings
