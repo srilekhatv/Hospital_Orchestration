@@ -1,10 +1,10 @@
 from airflow import DAG
 from airflow.providers.http.operators.http import SimpleHttpOperator
 from datetime import datetime
+import json
 
-# Replace with your values
-ACCOUNT_ID = "70471823487465"   # from your dbt URL
-JOB_ID = "70471823500217"       # your dbt job id
+ACCOUNT_ID = "70471823487465"
+JOB_ID = "70471823500217"
 
 with DAG(
     dag_id="dbt_trigger_with_service_token",
@@ -14,15 +14,16 @@ with DAG(
     tags=["dbt", "http"]
 ) as dag:
 
-    # Task: Trigger dbt job run
     trigger_dbt = SimpleHttpOperator(
         task_id="trigger_dbt",
-        http_conn_id="dbt_http_conn",   # configure this in Astronomer
+        http_conn_id="dbt_http_conn",
         endpoint=f"api/v2/accounts/{ACCOUNT_ID}/jobs/{JOB_ID}/run/",
         method="POST",
         headers={
             "Authorization": "Token dbtu_uwGba_sY2eqd6NcQLh8u_6pdFHgk9ezQcjvvDHmgYb81xNim8I",  # your service token
             "Content-Type": "application/json"
         },
-        data="{}"  # empty JSON payload triggers job with default settings
+        data=json.dumps({
+            "cause": "Triggered by Airflow via Astronomer"
+        })
     )
