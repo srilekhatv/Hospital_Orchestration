@@ -1,16 +1,16 @@
 from airflow import DAG
-from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
+from airflow.providers.dbt.cloud.operators.dbt import DbtCloudRunJobOperator
 from datetime import datetime
 
 with DAG(
-    "snowflake_test",
+    "dbt_test",
     start_date=datetime(2025, 8, 1),
     schedule_interval=None,
     catchup=False,
 ) as dag:
 
-    test_task = SnowflakeOperator(
-        task_id="check_row_count",
-        snowflake_conn_id="snowflake_conn",
-        sql="SELECT COUNT(*) FROM RAW.PATIENT_VISITS;"
+    dbt_run = DbtCloudRunJobOperator(
+        task_id="dbt_run",
+        job_id=70471823500217,   # your dbt job id
+        dbt_cloud_conn_id="dbt_cloud_conn"
     )
