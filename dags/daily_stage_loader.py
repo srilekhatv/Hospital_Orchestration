@@ -1,7 +1,6 @@
 from airflow import DAG
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.operators.python import PythonOperator
-from airflow.providers.dbt.cloud.operators.dbt import DbtCloudRunJobOperator
 from airflow.exceptions import AirflowFailException
 from datetime import datetime
 
@@ -26,13 +25,13 @@ def validate_rows(**context):
 
 with DAG(
     dag_id="daily_stage_loader",
-    start_date=datetime(2025, 8, 1),   # must be in the past
+    start_date=datetime(2025, 8, 1),
     schedule_interval="@daily",
     catchup=False,
-    tags=["snowflake", "hospital", "dbt"]
+    tags=["snowflake", "hospital"]
 ) as dag:
 
-    # Step 1: Truncate RAW (only needed on first run)
+    # Step 1: Truncate RAW (only needed first run)
     truncate_task = SnowflakeOperator(
         task_id="truncate_table",
         snowflake_conn_id="snowflake_conn",
@@ -62,7 +61,7 @@ with DAG(
         task_id="check_row_count",
         snowflake_conn_id="snowflake_conn",
         sql="SELECT COUNT(*) FROM RAW.PATIENT_VISITS;",
-        do_xcom_push=True,   # Required for validate_rows
+        do_xcom_push=True,
     )
 
     # Step 5: Validate load (fail if 0 rows)
@@ -71,40 +70,21 @@ with DAG(
         python_callable=validate_rows,
     )
 
-    # Step 6: Insert audit log (capture source_file here instead of RAW table)
+    # Step 6: Insert audit log
     audit_log_task = SnowflakeOperator(
-    task_id="insert_audit_log",
-    snowflake_conn_id="snowflake_conn",
-    sql="""
-        INSERT INTO AUDIT.LOAD_LOGS (execution_date, source_file, rows_loaded)
-        SELECT 
-            '{{ ds }}'::DATE AS execution_date,
-            METADATA$FILENAME AS source_file,
-            COUNT(*) AS rows_loaded
-        FROM @RAW.HOSPITAL_STAGE/{{ (execution_date + macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
-        (FILE_FORMAT => RAW.CLEANED_CSV_FORMAT)
-        GROUP BY METADATA$FILENAME;
-    """
-)
-
-
-    # Step 7: dbt run
-    dbt_run = DbtCloudRunJobOperator(
-        task_id="dbt_run",
-        job_id=70471823500217,        # Hospital Run Job ID
-        dbt_cloud_conn_id="dbt_cloud_conn",
-        check_interval=30,
-        timeout=600,
+        task_id="insert_audit_log",
+        snowflake_conn_id="snowflake_conn",
+        sql="""
+            INSERT INTO AUDIT.LOAD_LOGS (execution_date, source_file, rows_loaded)
+            SELECT 
+                '{{ ds }}'::DATE AS execution_date,
+                METADATA$FILENAME AS source_file,
+                COUNT(*) AS rows_loaded
+            FROM @RAW.HOSPITAL_STAGE/{{ (execution_date + macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
+            (FILE_FORMAT => RAW.CLEANED_CSV_FORMAT)
+            GROUP BY METADATA$FILENAME;
+        """
     )
 
-    # Step 8: dbt test
-    dbt_test = DbtCloudRunJobOperator(
-        task_id="dbt_test",
-        job_id=70471823500220,        # Hospital Test Job ID
-        dbt_cloud_conn_id="dbt_cloud_conn",
-        check_interval=30,
-        timeout=600,
-    )
-
-    # DAG flow
-    truncate_task >> log_task >> load_task >> rowcount_task >> validate_task >> audit_log_task >> dbt_run >> dbt_test
+    # DAG flow (Snowflake only)
+    truncate_task >> log_task >> load_task >> rowcount_task >> validate_task >> audit_log_task
