@@ -87,7 +87,7 @@ with DAG(
                 '{{ ds }}'::DATE AS execution_date,
                 METADATA$FILENAME AS source_file,
                 COUNT(*) AS rows_loaded
-            FROM @RAW.HOSPITAL_STAGE/{{ (execution_date + macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
+            FROM @RAW.HOSPITAL_STAGE/{{ (execution_date - macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
             (FILE_FORMAT => RAW.CLEANED_CSV_FORMAT)
             GROUP BY METADATA$FILENAME;
         """
