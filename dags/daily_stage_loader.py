@@ -3,14 +3,16 @@ from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.operators.python import PythonOperator
 from airflow.exceptions import AirflowFailException
 from airflow.providers.http.operators.http import SimpleHttpOperator
+from airflow.models import Variable
 from datetime import datetime
 import json
 
 # Config
 ACCOUNT_ID = "70471823487465"   # your dbt account id
-RUN_JOB_ID = "70471823500217"   # dbt "run" job id
-TEST_JOB_ID = "70471823500220"  # dbt "test" job id
+RUN_JOB_ID = Variable.get("DBT_RUN_JOB_ID")   # Prod Run Job ID from Airflow Variables
+TEST_JOB_ID = Variable.get("DBT_TEST_JOB_ID") # Prod Test Job ID from Airflow Variables
 DBT_SERVICE_TOKEN = "dbtu_uwGba_sY2eqd6NcQLh8u_6pdFHgk9ezQcjvvDHmgYb81xNim8I"  # your service token
+
 
 # Step 0: Log file for debugging
 def log_file(execution_date, **kwargs):
