@@ -57,7 +57,7 @@ with DAG(
         snowflake_conn_id="snowflake_conn",
         sql="""
             COPY INTO RAW.PATIENT_VISITS
-            FROM @RAW.HOSPITAL_STAGE/{{ (execution_date + macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
+            FROM @RAW.HOSPITAL_STAGE/{{ (execution_date - macros.timedelta(days=1)).strftime('%Y-%m-%d') }}.csv
             FILE_FORMAT = (FORMAT_NAME = RAW.CLEANED_CSV_FORMAT)
             ON_ERROR = 'CONTINUE';
         """
