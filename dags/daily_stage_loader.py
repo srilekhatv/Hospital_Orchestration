@@ -105,6 +105,17 @@ with DAG(
         },
         data=json.dumps({"cause": "Triggered by Airflow - Run Job"})
     )
+    # Step 7.5: Capture fact table counts after dbt run
+    check_fact_counts = SnowflakeOperator(
+        task_id="check_fact_counts",
+        snowflake_conn_id="snowflake_conn",
+        sql="""
+            UPDATE AUDIT.LOAD_LOGS
+            SET fact_visits_count = (SELECT COUNT(*) FROM HOSPITAL_DB.ANALYTICS.fact_visits),
+                fact_medications_count = (SELECT COUNT(*) FROM HOSPITAL_DB.ANALYTICS.fact_medications)
+            WHERE execution_date = '{{ ds }}';
+        """
+    )
 
     # Step 8: Trigger dbt test (via API)
     dbt_test = SimpleHttpOperator(
@@ -120,4 +131,4 @@ with DAG(
     )
 
     # DAG flow
-    truncate_task >> log_task >> load_task >> rowcount_task >> validate_task >> audit_log_task >> dbt_run >> dbt_test
+    truncate_task >> log_task >> load_task >> rowcount_task >> validate_task >> audit_log_task >> dbt_run >> check_fact_counts >> dbt_test
